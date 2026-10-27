@@ -235,7 +235,10 @@ parameters as its methods dispatch on."))
         for operator = (source-node-operator node)
         for parameters = (and (member operator '("defun" "defgeneric") :test #'equal)
                               (source-definition--lambda-list node))
-        for count = (and parameters (source-definition--positional-count parameters))
+        ;; A SETF function takes the new value before its reader's parameters.
+        for count = (and parameters
+                         (- (source-definition--positional-count parameters)
+                            (if (source-definition--setf-name-p node) 1 0)))
         for allowed = (max (project-positional-limit (project-current))
                            (gethash (source-definition-name node)
                                     (source-positional-parameters-rule-specialized rule)
@@ -446,6 +449,15 @@ parameters as its methods dispatch on."))
 (defun source-definition--lambda-list (node)
   "Return the lambda list of a defun, defmethod, or defgeneric NODE, after any method qualifiers."
   (find-if #'source-node-list-p (nthcdr 2 (source-node-children node))))
+
+(-> source-definition--setf-name-p (source-node) boolean)
+(defun source-definition--setf-name-p (node)
+  "Return T when the definition NODE names a SETF function, as in (defun (setf f) ...)."
+  (let ((name (second (source-node-children node))))
+    (and name
+         (source-node-list-p name)
+         (equal (source-node-operator name) "setf")
+         t)))
 
 (-> source-definition--positional-count (source-node) (integer 0))
 (defun source-definition--positional-count (lambda-list)
