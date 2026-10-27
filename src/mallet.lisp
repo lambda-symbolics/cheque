@@ -63,7 +63,7 @@ private temporary directory; some rules compare definitions with that name."
 (defun source-mallet--temporary-directory ()
   "Create and return a new private directory below the host's temporary directory."
   (loop for directory = (uiop:ensure-directory-pathname
-                         (merge-pathnames (format nil "cheque-mallet-~36R" (random (expt 36 12)))
+                         (merge-pathnames (format nil "cheque-mallet-~36R" (random (expt 36 12) (make-random-state t)))
                                           (uiop:temporary-directory)))
         when (nth-value 1 (ensure-directories-exist directory))
           return directory))

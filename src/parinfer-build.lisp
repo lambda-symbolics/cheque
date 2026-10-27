@@ -147,7 +147,7 @@ Signal SOURCE-PARINFER-ERROR when the command fails."
 (defun source-parinfer-build--publish (target write)
   "Atomically replace TARGET with the file WRITE creates at the temporary pathname it is given."
   (let ((temporary (make-pathname :name     (format nil ".~A.~36R" (pathname-name target)
-                                                    (random (expt 36 8)))
+                                                    (random (expt 36 8) (make-random-state t)))
                                   :type     (pathname-type target)
                                   :defaults target)))
     (unwind-protect

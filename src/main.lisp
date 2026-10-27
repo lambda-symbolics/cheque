@@ -75,7 +75,7 @@ remain, and 2 for unusable arguments or configuration."
 (defun main--run (project &key fix warnings-p parinfer-p command stream)
   "Check PROJECT, report every finding to STREAM, and return 0 when none remain."
   (let* ((directory (uiop:ensure-directory-pathname
-                     (merge-pathnames (format nil "cheque-~36R" (random (expt 36 12)))
+                     (merge-pathnames (format nil "cheque-~36R" (random (expt 36 12) (make-random-state t)))
                                       (uiop:temporary-directory))))
          (run       (and warnings-p
                          (project-system-definitions project)
