@@ -220,21 +220,46 @@
 ;;;; -- Clause Layout --
 
 (defmethod source-rule-findings ((rule source-clause-layout-rule) (file source-file))
-  "Report clauses whose body starts on the line of their test."
-  (mapcar (lambda (clause)
-            (source-finding-create rule file
-                                   :line    (source-node-line clause)
-                                   :message "The clause body must start on the line after its test."
-                                   :column  (source-node-column clause)))
-          (source-clause--misplaced file)))
+  "Report clauses that share a line with the clause before them or whose body starts on the line of their test."
+  (append
+   (loop for (nil . pairs) in (source-clause--crowded file)
+         append (mapcar (lambda (pair)
+                          (source-finding-create rule file
+                                                 :line    (source-node-line (rest pair))
+                                                 :message "Start each clause on its own line."
+                                                 :column  (source-node-column (rest pair))))
+                        pairs))
+   (mapcar (lambda (clause)
+             (source-finding-create rule file
+                                    :line    (source-node-line clause)
+                                    :message "The clause body must start on the line after its test."
+                                    :column  (source-node-column clause)))
+           (source-clause--misplaced file))))
 
 (defmethod source-rule-fix ((rule source-clause-layout-rule) (file source-file))
-  "Move each misplaced clause body to the next line, below the clause's test."
+  "Start crowded clauses on their own lines, then move each misplaced clause body below its test.
+
+A form's crowded clauses move together, before any body, so a later clause on
+the same line never drifts right with the body before it."
   (declare (ignore rule))
   (let ((protected (source-file-protected-lines file)))
     (source-edit-groups-apply
      (source-file-text file)
-     (loop for clause in (source-clause--misplaced file)
+     (append
+      (loop for (column . pairs) in (source-clause--crowded file)
+            collect (list :first-line (source-node-line (rest (first pairs)))
+                          :last-line  (source-node-end-line (rest (first (last pairs))))
+                          :edits      (loop for (previous . clause) in pairs
+                                            append (cons (list (source-node-end previous)
+                                                               (source-node-prefix-start clause)
+                                                               (source-text--break 1 column))
+                                                         (source-shift-edits
+                                                          file
+                                                          :first-line (1+ (source-node-line clause))
+                                                          :last-line  (source-node-end-line clause)
+                                                          :delta      (- column (source-node-column clause))
+                                                          :protected  protected)))))
+      (loop for clause in (source-clause--misplaced file)
            for children = (source-node-children clause)
            for test = (first children)
            for body = (second children)
@@ -248,7 +273,7 @@
                                             :first-line (1+ (source-node-end-line test))
                                             :last-line  (source-node-end-line clause)
                                             :delta      (- column (source-node-prefix-column body))
-                                            :protected  protected)))))))
+                                            :protected  protected))))))))
 
 
 ;;;; -- Local Function Spacing --
@@ -478,6 +503,51 @@ items sharing a line, is not judged. Each gap is a plist of :LINE, :START,
                                            "form"))
                        gaps))))
     (nreverse gaps)))
+
+(-> source-clause--clauses (source-node) list)
+(defun source-clause--clauses (node)
+  "Return the clauses of the conditional NODE, or NIL when NODE is not a conditional."
+  (let ((operator (source-node-operator node)))
+    (cond
+      ((equal operator "cond")
+       (rest (source-node-children node)))
+      ((member operator *source-clause-operators* :test #'equal)
+       (nthcdr 2 (source-node-children node))))))
+
+(-> source-clause--crowded (source-file) list)
+(defun source-clause--crowded (file)
+  "Return (COLUMN . PAIRS) for each conditional of FILE with clauses that share a line.
+
+PAIRS holds (PREVIOUS . CLAUSE) for each clause that starts, after only blanks,
+on the line where the clause before it ends. COLUMN is where the form's first
+clause that begins its own line starts, or its first clause when none does."
+  (let ((forms nil))
+    (dolist (top (source-file-nodes file))
+      (source-node-walk
+       top
+       (lambda (node)
+         (let* ((clauses (source-clause--clauses node))
+                (pairs   (loop for (previous clause) on clauses
+                               while clause
+                               when (and (source-node-list-p clause)
+                                         (null (source-node-prefixes clause))
+                                         (= (source-node-end-line previous) (source-node-line clause))
+                                         (source-text--blank-between-p
+                                          file (source-node-end previous) (source-node-prefix-start clause)))
+                                 collect (cons previous clause))))
+           (when pairs
+             (push (cons (source-node-column
+                          (or (find-if (lambda (clause)
+                                         (= (source-node-column clause)
+                                            (or (position #\Space
+                                                          (source-file-line file (source-node-line clause))
+                                                          :test-not #'char=)
+                                                0)))
+                                       clauses)
+                              (first clauses)))
+                         pairs)
+                   forms))))))
+    (nreverse forms)))
 
 (-> source-clause--misplaced (source-file) list)
 (defun source-clause--misplaced (file)

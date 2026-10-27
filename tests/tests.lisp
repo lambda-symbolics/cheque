@@ -218,6 +218,16 @@ ROOT is a variable name; BODY's values are returned."
                                                  ("(defun a ())" "" "(defun b ())"))
                   (source-clause-layout-rule ("(cond (x y" "         z))")
                                              ("(cond (x" "       y" "       z))"))
+                  (source-clause-layout-rule ("(cond ((a)" "       1) ((b)" "           (f" "            2)))")
+                                             ("(cond ((a)" "       1)" "      ((b)" "       (f" "        2)))"))
+                  (source-clause-layout-rule ("(case k (:a" "         1) (:b" "             2) (t"
+                                              "                 3))")
+                                             ("(case k (:a" "         1)" "        (:b" "         2)"
+                                              "        (t" "         3))"))
+                  (source-clause-layout-rule ("(case key (:a" "           1)" "        (:b" "         2) (:c"
+                                              "             3))")
+                                             ("(case key (:a" "           1)" "        (:b" "         2)"
+                                              "        (:c" "         3))"))
                   (source-local-function-spacing-rule ("(labels ((a () 1)" "         (b () 2))" "  (a))")
                                                       ("(labels ((a () 1)" ""
                                                        "         (b () 2))" "  (a))"))
@@ -312,6 +322,19 @@ ROOT is a variable name; BODY's values are returned."
     (uiop:run-program (list "git" "-C" (uiop:native-namestring root) "add" "."))
     (test-assert (null (source-check-run (project-create :root root) :stream (make-broadcast-stream)))
                  "the same name declared in two packages is two functions")))
+(fiveam:test test-source-check-clause-repair
+  "Repair clauses that share one line into one clause per line, each body below its test."
+  (with-test-root (root)
+    (source-check-tests--write root "src/a.lisp"
+                               (source-check-tests--text '("(cond ((plusp dx) 2) ((minusp dx) 8) (t 0))")))
+    (uiop:run-program (list "git" "-C" (uiop:native-namestring root) "init" "--quiet"))
+    (uiop:run-program (list "git" "-C" (uiop:native-namestring root) "add" "."))
+    (source-check-run (project-create :root root) :fix t :stream (make-broadcast-stream))
+    (test-assert (equal (uiop:read-file-string (merge-pathnames "src/a.lisp" root))
+                        (source-check-tests--text '("(cond ((plusp dx)" "       2)"
+                                                    "      ((minusp dx)" "       8)"
+                                                    "      (t" "       0))")))
+                 "every clause gets its own line, aligned with the first")))
 
 (fiveam:test test-source-check-excluded-paths
   "Skip excluded tracked files, named exactly or by a directory ending in a slash."
