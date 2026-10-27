@@ -1,0 +1,109 @@
+#+title: cheque
+
+Source rules, safe layout repairs, Mallet presets, and clean-compile warning
+checks for Common Lisp projects on SBCL.
+
+cheque reads a project's tracked files as written, without interning symbols
+or evaluating reader conditionals, and reports each violation at its line and
+column. Rules that can repair what they find do so with =--fix=; a layout
+repair that would change anything but whitespace outside string literals is
+refused. A separate process compiles every system the project defines from
+scratch and reports each compiler warning nobody silenced on purpose.
+
+* Rules
+
+- Text :: one final newline, no trailing whitespace, no tabs, no em dashes,
+  =;;;; -- Title --= section headers, no TODO or FIXME comments.
+- Layout :: one blank line between definitions and two before a major section,
+  conditional clause bodies on the line after their test, blank lines between
+  =labels= functions, and aligned =let= bindings, keyword arguments, and slot
+  options. Every Lisp file must be a fixed point of parinfer-rust's paren mode,
+  so editors running parinfer never reindent committed source.
+- Definitions :: documentation strings, one Serapeum =->= declaration per
+  function and none for generic functions, keyword arguments past the
+  positional limit, =first= and =rest= instead of =car= and =cdr=, =%= rather
+  than =%%= in =format= controls, no constants, and optionally one project
+  package.
+- Mallet :: the selection of [[https://github.com/fukamachi/mallet][Mallet]]'s
+  rules the preset names. Code that breaks one on purpose says why in place:
+  =; mallet:suppress no-ignore-errors -- best-effort cleanup=.
+- Warnings :: every compiler and load warning from the project's own files,
+  style warnings included.
+
+* Using cheque in a project
+
+cheque is a development tool. Install it apart from the project's runtime
+dependencies, for example as its own qlot project in a cache directory.
+qlot does not read a dependency's qlfile, so list Mallet's Git dependencies
+next to cheque:
+
+#+begin_src text
+git cheque https://github.com/lambda-symbolics/cheque.git
+git trivial-glob https://github.com/fukamachi/trivial-glob.git :ref 0c2675d9452ed164970f2fc4a0e41784ebee819a
+git mallet https://github.com/fukamachi/mallet.git :ref 553c9092239e8a215dfb88650cc8facd2569be2b
+#+end_src
+
+Keep that qlot project outside trees ASDF searches by default, such as
+=~/common-lisp=: Mallet vendors its own ASDF, which a =.qlot= directory there
+would expose to every Lisp process.
+
+Describe the project in =cheque.sexp= at its root:
+
+#+begin_src lisp
+(:package            "example"
+ :system-definitions ("example.asd"))
+#+end_src
+
+Then run the check from the project's =script/check=:
+
+#+begin_src lisp
+(asdf:load-system "cheque")
+(uiop:quit (cheque:main (uiop:command-line-arguments) :root project-root))
+#+end_src
+
+=cheque:main= accepts =--fix=, =--no-warnings=, and =--no-parinfer=, and
+returns 0 when nothing was found, 1 when findings remain, and 2 for unusable
+arguments or configuration. A project with its own test runner can call
+=cheque:source-check-run=, =cheque:source-warning-run-start=,
+=cheque:source-warning-run-finish=, and =cheque:source-check-report= directly
+to overlap the clean compile with its tests.
+
+The parinfer rule uses a private build of the parinfer-rust fork Emacs's
+parinfer-rust-mode downloads, at the commit =native/parinfer/commit= pins.
+=cheque:source-parinfer-library-ensure= builds it with Git and Cargo on first
+use and installs it below the XDG data directory.
+
+* Settings
+
+Every setting comes from a preset, =lambda-symbolics= by default, and
+=cheque.sexp= overrides any of them with the same keyword. =:preset= names
+another preset.
+
+| Setting                       | Meaning                                                         |
+|-------------------------------+-----------------------------------------------------------------|
+| =:package=                    | The one package project source uses, or =nil= for any         |
+| =:package-definition=         | The one file that defines that package                          |
+| =:package-directories=        | Directories whose files belong to the package                   |
+| =:typed-directories=          | Directories whose functions declare types with =->=             |
+| =:mallet-rules=               | Mallet rules every tracked Lisp file follows                    |
+| =:mallet-project-rules=       | Mallet rules project source follows as well                     |
+| =:mallet-project-directories= | Directories holding that project source                         |
+| =:system-definitions=         | =.asd= files whose systems are project source and are compiled  |
+| =:setup=                      | File the clean compile loads first, such as =.qlot/setup.lisp=  |
+| =:positional-limit=           | Most positional parameters before keyword arguments             |
+| =:text-file-types=            | File types the rules inspect                                    |
+| =:excluded-paths=             | Tracked files the rules never inspect, such as =LICENSE.lisp=   |
+
+* Developing cheque
+
+#+begin_src sh
+sbcl --script script/check.lisp
+sbcl --script script/check.lisp --fix
+#+end_src
+
+The script installs the locked development tools into the XDG cache on first
+use, runs the FiveAM suite, and then checks cheque with cheque.
+
+* License
+
+COLL-Attribution; see =LICENSE.lisp=.
