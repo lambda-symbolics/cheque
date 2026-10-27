@@ -297,6 +297,22 @@ ROOT is a variable name; BODY's values are returned."
       (test-assert (search "(let ((a  1)" (uiop:read-file-string (merge-pathnames "src/a.lisp" root)))
                    "the repair is written in place"))))
 
+(fiveam:test test-source-check-declarations-per-package
+  "Judge -> declarations within each file's package, so two packages may declare one name."
+  (with-test-root (root)
+    (source-check-tests--write root "src/a.lisp"
+                               (source-check-tests--text
+                                '("(in-package #:example)" "" "(-> run () t)" "(defun run ()"
+                                  "  \"Return T.\"" "  t)")))
+    (source-check-tests--write root "tests/a.lisp"
+                               (source-check-tests--text
+                                '("(in-package #:example/tests)" "" "(-> run () t)" "(defun run ()"
+                                  "  \"Return T.\"" "  t)")))
+    (uiop:run-program (list "git" "-C" (uiop:native-namestring root) "init" "--quiet"))
+    (uiop:run-program (list "git" "-C" (uiop:native-namestring root) "add" "."))
+    (test-assert (null (source-check-run (project-create :root root) :stream (make-broadcast-stream)))
+                 "the same name declared in two packages is two functions")))
+
 (fiveam:test test-source-check-excluded-paths
   "Skip excluded tracked files, named exactly or by a directory ending in a slash."
   (with-test-root (root)

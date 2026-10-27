@@ -201,16 +201,17 @@ parameters as its methods dispatch on."))
   (source-file-typed-p file))
 
 (defmethod source-rule-prepare ((rule source-declaration-uniqueness-rule) (file source-file))
-  "Record where each -> declaration of FILE names a function."
+  "Record where each -> declaration of FILE names a function, keyed by FILE's package and the name."
   (loop for (name node) in (source-declaration--named file)
         do (push (list (source-file-path file) (source-node-line node))
-                 (gethash name (source-declaration-uniqueness-rule-declarations rule)))))
+                 (gethash (list (source-declaration--package file) name)
+                          (source-declaration-uniqueness-rule-declarations rule)))))
 
 (defmethod source-rule-findings ((rule source-declaration-uniqueness-rule) (file source-file))
-  "Report this file's -> declarations of a function declared elsewhere too."
+  "Report this file's -> declarations of a function declared elsewhere in the same package too."
   (let ((declarations (source-declaration-uniqueness-rule-declarations rule)))
     (loop for (name node) in (source-declaration--named file)
-          for places = (gethash name declarations)
+          for places = (gethash (list (source-declaration--package file) name) declarations)
           when (rest places)
             collect (source-finding-create
                      rule file
@@ -449,6 +450,16 @@ parameters as its methods dispatch on."))
 (defun source-definition--lambda-list (node)
   "Return the lambda list of a defun, defmethod, or defgeneric NODE, after any method qualifiers."
   (find-if #'source-node-list-p (nthcdr 2 (source-node-children node))))
+
+(-> source-declaration--package (source-file) string)
+(defun source-declaration--package (file)
+  "Return the lowercase package name FILE's first IN-PACKAGE form names, or an empty string."
+  (let ((form (find "in-package" (source-file-nodes file)
+                    :key #'source-node-operator :test #'equal)))
+    (if form
+        (string-left-trim "#:" (string-downcase
+                                (source-node-text (second (source-node-children form)))))
+        "")))
 
 (-> source-definition--setf-name-p (source-node) boolean)
 (defun source-definition--setf-name-p (node)
