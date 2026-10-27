@@ -347,9 +347,13 @@ parameters as its methods dispatch on."))
     (dolist (top (source-file-nodes file))
       (source-node-walk top
                         (lambda (node)
-                          (when (and (member (source-node-operator node)
-                                             '("defpackage" "define-package" "make-package")
-                                             :test #'equal)
+                          ;; MAKE-PACKAGE inside a function, such as a test's
+                          ;; scratch package, makes a run-time value.
+                          (when (and (or (member (source-node-operator node)
+                                                 '("defpackage" "define-package")
+                                                 :test #'equal)
+                                         (and (eq node top)
+                                              (equal (source-node-operator node) "make-package")))
                                      (not (equal (source-file-path file) definition)))
                             (push (source-finding-create
                                    rule file

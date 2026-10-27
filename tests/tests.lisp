@@ -133,6 +133,11 @@ ROOT is a variable name; BODY's values are returned."
                     (source-section-header-rule "a.lisp" (";;;; -- Title --" "(a)") ())
                     (source-package-rule "src/a.lisp" ("(defpackage #:other)") (1 1))
                     (source-package-rule "src/a.lisp" ("(in-package #:example)") ())
+                    (source-package-rule "src/a.lisp" ("(in-package #:example)" "(make-package \"OTHER\")") (2))
+                    (source-package-rule "src/a.lisp"
+                                         ("(in-package #:example)" "(defun scratch ()"
+                                          "  (make-package \"SCRATCH\"))")
+                                         ())
                     (source-package-rule "script/a.lisp" ("(defpackage #:other)") :not-applicable)
                     (source-constant-rule "script/a.lisp" ("(defconstant +limit+ 1)") (1))
                     (source-constant-rule "a.lisp" ("(alexandria:define-constant +limit+ 1)") (1))
