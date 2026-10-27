@@ -92,7 +92,8 @@ another preset.
 | =:setup=                      | File the clean compile loads first, such as =.qlot/setup.lisp=  |
 | =:positional-limit=           | Most positional parameters before keyword arguments             |
 | =:text-file-types=            | File types the rules inspect                                    |
-| =:excluded-paths=             | Tracked files the rules never inspect, such as =LICENSE.lisp=   |
+| =:excluded-paths=             | Tracked files the rules never inspect, such as =LICENSE.lisp=;  |
+|                               | an entry ending in =/= names a directory, such as =vendor/=     |
 
 * Developing cheque
 

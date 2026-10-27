@@ -49,7 +49,7 @@
   "Return the repository-relative paths of PROJECT's tracked files that rules inspect."
   (remove-if-not (lambda (path)
                    (and (member (pathname-type path) (project-text-file-types project) :test #'equal)
-                        (not (member path (project-excluded-paths project) :test #'equal))))
+                        (not (source-check--excluded-p project path))))
                  (remove ""
                          (uiop:split-string
                           (uiop:run-program (list "git" "-C" (uiop:native-namestring
@@ -58,6 +58,16 @@
                                             :output ':string)
                           :separator (list (code-char 0)))
                          :test #'equal)))
+
+(-> source-check--excluded-p (project string) boolean)
+(defun source-check--excluded-p (project path)
+  "Return T when PROJECT excludes PATH, by its exact name or a directory ending in a slash."
+  (and (some (lambda (excluded)
+               (if (uiop:string-suffix-p excluded "/")
+                   (uiop:string-prefix-p excluded path)
+                   (equal excluded path)))
+             (project-excluded-paths project))
+       t))
 
 (-> source-check-system-paths (project) hash-table)
 (defun source-check-system-paths (project)

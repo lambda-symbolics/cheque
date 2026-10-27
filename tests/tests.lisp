@@ -290,6 +290,18 @@ ROOT is a variable name; BODY's values are returned."
       (test-assert (search "(let ((a  1)" (uiop:read-file-string (merge-pathnames "src/a.lisp" root)))
                    "the repair is written in place"))))
 
+(fiveam:test test-source-check-excluded-paths
+  "Skip excluded tracked files, named exactly or by a directory ending in a slash."
+  (with-test-root (root)
+    (dolist (path '("vendor/library/a.lisp" "generated.lisp" "src/vendor.lisp"))
+      (source-check-tests--write root path "(defconstant +limit+ 1)"))
+    (uiop:run-program (list "git" "-C" (uiop:native-namestring root) "init" "--quiet"))
+    (uiop:run-program (list "git" "-C" (uiop:native-namestring root) "add" "."))
+    (test-assert (equal (source-check-paths (project-create :root           root
+                                                            :excluded-paths '("vendor/" "generated.lisp")))
+                        '("src/vendor.lisp"))
+                 "a directory entry excludes everything below it and nothing that only shares its name")))
+
 
 ;;;; -- Native and Process Boundaries --
 

@@ -137,7 +137,7 @@ Their source files are project source; other Lisp files, such as scripts, are no
     :initarg       :excluded-paths
     :reader        project-excluded-paths
     :type          list
-    :documentation "Repository-relative paths of tracked files the rules never inspect, such as generated text.")
+    :documentation "Repository-relative paths of tracked files the rules never inspect, such as generated text; a path ending in a slash names a directory.")
    (preset
     :initarg       :preset
     :reader        project-preset
