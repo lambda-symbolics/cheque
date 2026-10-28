@@ -5,7 +5,8 @@
 ;;; These rules hold what the lambda-symbolics style asks of definitions:
 ;;; documentation, -> declarations for functions and none for generic
 ;;; functions, keyword arguments past the positional limit, first and rest instead of car
-;;; and cdr, % in format controls, no constants, no TODOs, and one package.
+;;; and cdr, % in format controls, variable clauses before repeat in LOOP, no constants,
+;;; no TODOs, and one package.
 
 (defparameter *source-list-accessor-replacements*
   '(("car" . "first") ("cdr" . "rest") ("cadr" . "second") ("caddr" . "third")
@@ -16,6 +17,20 @@
   '("car" "cdr" "caar" "cadr" "cdar" "cddr" "caaar" "caadr" "cadar" "caddr" "cdaar"
     "cdadr" "cddar" "cdddr" "cadddr" "cddddr")
   "The cons accessors application code replaces with first, rest, and their relatives.")
+
+(defparameter *source-loop-variable-keywords* '("for" "as" "with")
+  "LOOP keywords that start a variable clause.")
+
+(defparameter *source-loop-main-keywords*
+  '("do" "doing" "return" "collect" "collecting" "append" "appending" "nconc" "nconcing"
+    "count" "counting" "sum" "summing" "maximize" "maximizing" "minimize" "minimizing"
+    "when" "if" "unless" "while" "until" "repeat" "always" "never" "thereis")
+  "LOOP keywords that start a main clause.")
+
+(defparameter *source-loop-operand-keywords*
+  '("named" "and" "into" "=" "in" "on" "across" "from" "upfrom" "downfrom" "to" "upto"
+    "downto" "below" "above" "by" "then" "being" "of" "using" "of-type")
+  "LOOP words that take the next element as their operand, a form or a variable.")
 
 (defparameter *source-format-operators* '("format" "error" "warn" "cerror" "formatter")
   "Operators whose literal control string follows the destination or comes first.")
@@ -86,6 +101,17 @@ parameters as its methods dispatch on."))
    :name "format-percent"
    :description "A literal percent sign in a format control string is %, not %%.")
   (:documentation "Format control strings do not double percent signs."))
+
+(defclass source-loop-repeat-order-rule (source-rule)
+  ()
+  (:default-initargs
+   :name "loop-repeat-order"
+   :description "Put LOOP's for, as, and with clauses before its repeat clause.")
+  (:documentation "No LOOP variable clause follows a repeat clause.
+
+The standard puts every variable clause before every main clause. The rule
+holds only repeat to that order. A while or until test before a for clause
+guards the for clause's step, and SBCL runs the clauses in the order written."))
 
 (defclass source-constant-rule (source-rule)
   ()
@@ -305,6 +331,24 @@ parameters as its methods dispatch on."))
   "Changing a control string changes the forms."
   (declare (ignore rule))
   nil)
+
+(defmethod source-rule-findings ((rule source-loop-repeat-order-rule) (file source-file))
+  "Report LOOP variable clauses that follow a repeat clause."
+  (let ((findings nil))
+    (dolist (top (source-file-nodes file))
+      (source-node-walk
+       top
+       (lambda (node)
+         (when (equal (source-node-operator node) "loop")
+           (dolist (keyword (source-expression--late-loop-variables node))
+             (push (source-finding-create
+                    rule file
+                    :line    (source-node-line keyword)
+                    :message (format nil "Move this ~A clause before the repeat clause; LOOP takes variable clauses first."
+                                     (source-expression--loop-word keyword))
+                    :column  (source-node-column keyword))
+                   findings))))))
+    (nreverse findings)))
 
 (defmethod source-rule-findings ((rule source-constant-rule) (file source-file))
   "Report defconstant and define-constant forms."
@@ -605,6 +649,40 @@ parameters as its methods dispatch on."))
                     (source-node-text node))
              (string-upcase (rest entry))
              (rest entry)))))
+
+(-> source-expression--late-loop-variables (source-node) list)
+(defun source-expression--late-loop-variables (node)
+  "Return the atoms starting variable clauses that follow a repeat clause in LOOP NODE.
+
+An element following a keyword that takes an operand is that operand, so a
+variable or form named like a keyword counts as neither."
+  (let ((operand-p nil)
+        (repeat-p  nil)
+        (late      nil))
+    (dolist (child (rest (source-node-children node)))
+      (let ((word (source-expression--loop-word child)))
+        (cond
+          (operand-p
+           (setf operand-p nil))
+          ((null word)
+           nil)
+          ((member word *source-loop-variable-keywords* :test #'equal)
+           (when repeat-p
+             (push child late))
+           (setf operand-p t))
+          ((member word *source-loop-main-keywords* :test #'equal)
+           (setf repeat-p  (or repeat-p (equal word "repeat"))
+                 operand-p t))
+          ((member word *source-loop-operand-keywords* :test #'equal)
+           (setf operand-p t)))))
+    (nreverse late)))
+
+(-> source-expression--loop-word (source-node) (option string))
+(defun source-expression--loop-word (node)
+  "Return atom NODE's lowercase name without a package or keyword colon, or NIL for other nodes."
+  (let ((name (source-node-name node)))
+    (and name
+         (string-left-trim ":" name))))
 
 (-> source-expression--doubled-percent (source-file) list)
 (defun source-expression--doubled-percent (file)

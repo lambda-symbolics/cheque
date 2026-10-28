@@ -24,6 +24,7 @@
     source-positional-parameters-rule
     source-list-accessor-rule
     source-format-percent-rule
+    source-loop-repeat-order-rule
     source-top-level-spacing-rule
     source-local-function-spacing-rule
     source-clause-layout-rule

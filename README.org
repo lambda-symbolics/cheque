@@ -22,8 +22,8 @@ scratch and reports each compiler warning nobody silenced on purpose.
 - Definitions :: documentation strings, one Serapeum =->= declaration per
   function and none for generic functions, keyword arguments past the
   positional limit, =first= and =rest= instead of =car= and =cdr=, =%= rather
-  than =%%= in =format= controls, no constants, and optionally one project
-  package.
+  than =%%= in =format= controls, =for=, =as=, and =with= clauses before a
+  =loop='s =repeat= clause, no constants, and optionally one project package.
 - Mallet :: the selection of [[https://github.com/fukamachi/mallet][Mallet]]'s
   rules the preset names. Code that breaks one on purpose says why in place:
   =; mallet:suppress no-ignore-errors -- best-effort cleanup=.
